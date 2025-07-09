@@ -48,3 +48,25 @@ export const displayWeather = (data) => {
     elements.weatherDisplay.style.display = 'block';
     elements.error.style.display = 'none';
 };
+
+export const getElements = () => ({
+  // alte elemente deja existente...
+  unitSelect: document.getElementById('unit-select'),
+  langSelect: document.getElementById('lang-select'),
+  temperature: document.getElementById('temperature')
+});
+
+export const updateTemperatureDisplay = (elements, temperature, unit) => {
+  const symbol = unit === 'metric' ? '°C' : '°F';
+  elements.temperature.textContent = `${temperature}${symbol}`;
+};
+
+export const saveUserPreferences = (unit, lang) => {
+  localStorage.setItem('weatherUnit', unit);
+  localStorage.setItem('weatherLang', lang);
+};
+
+export const loadUserPreferences = () => ({
+  unit: localStorage.getItem('weatherUnit') || 'metric',
+  lang: localStorage.getItem('weatherLang') || 'ro'
+});
