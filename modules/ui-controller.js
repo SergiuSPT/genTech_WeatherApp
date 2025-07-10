@@ -10,7 +10,73 @@ export const elements = {
     wind: document.getElementById('wind'),
     description: document.getElementById('description'),
     cityName: document.getElementById('city-name'),
+    historySection: document.querySelector('#history-section'),
+    historyList: document.querySelector('#history-list'),
+    clearHistoryBtn: document.querySelector('#clear-history-btn'),
 };
+
+export const showHistory = () => {
+  elements.historySection.classList.remove('hidden')
+}
+export const hideHistory = () => {
+  elements.historySection.classList.add('hidden')
+}
+
+export const renderHistory = (historyItems) => {
+  if (historyItems.length === 0) {
+    elements.historyList.innerHTML =
+      '<p class="no-history">Nu ai căutări recente</p>'
+    return
+  }
+
+  const historyHTML = historyItems
+    .map((item) => {
+      const timeAgo = getTimeAgo(item.timestamp)
+      return `
+        <div class="history-item" 
+             data-city="${item.city}" 
+             data-lat="${item.coordinates.lat}" 
+             data-lon="${item.coordinates.lon}">
+          <div class="history-location">
+            <span class="city">${item.city}</span>,
+            <span class="country">${item.country}</span>
+          </div>
+          <div class="history-time">${timeAgo}</div>
+        </div>
+      `
+    })
+    .join('')
+
+  elements.historyList.innerHTML = historyHTML
+}
+
+const getTimeAgo = (timestamp) => {
+  const now = Date.now()
+  const diff = now - timestamp
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 60) return `${minutes} minute în urmă`
+  if (hours < 24) return `${hours} ore în urmă`
+  return `${days} zile în urmă`
+}
+
+export const addHistoryEventListeners = (onHistoryClick, onClearHistory) => {
+  elements.historyList.addEventListener('click', (e) => {
+    const item = e.target.closest('.history-item')
+    if (item) {
+      const city = item.dataset.city
+      const lat = parseFloat(item.dataset.lat)
+      const lon = parseFloat(item.dataset.lon)
+      onHistoryClick({ city, lat, lon })
+    }
+  })
+
+  elements.clearHistoryBtn.addEventListener('click', () => {
+    onClearHistory()
+  })
+}
 
 // Funcții UI
 export const showLoading = () => {
