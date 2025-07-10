@@ -1,84 +1,120 @@
-import * as ui from './modules/ui-controller.js';
-import { getCurrentWeather } from './modules/weather-service.js';
-import { CONFIG, API_ENDPOINTS, ERROR_MESSAGES } from './modules/config.js';
-import { getCoords } from './modules/location-service.js';
-import { getWeatherByCoords } from './modules/weather-service.js';
+// Importuri existente și noi:
+import { logger } from './modules/logger.js'
+import { historyService } from './modules/history-service.js'
+import { weatherService } from './modules/weather-service.js'
+import * as ui from './modules/ui-controller.js'
 import {
-  getElements,
-  saveUserPreferences,
-  loadUserPreferences,
-  updateTemperatureDisplay
-} from './modules/ui-controller.js';
-
-import {
-  getElements,
-  displayWeather,
-  showError,
-  showLoading,
-  showMessage,
-  saveUserPreferences,
-  loadUserPreferences,
-  updateTemperatureDisplay
+  renderHistory,
+  showHistory,
+  addHistoryEventListeners,
 } from './modules/ui-controller.js'
 
-getCoords()
-  .then((coords) =>
-    getWeatherByCoords(coords.latitude, coords.longitude)
-  )
-  .then((weather) => {
-    console.log('Weather pentru locația ta:', weather);
-  })
-  .catch((err) => console.error(err.message));
+// Inițializare aplicație
+const initializeApp = async () => {
+  logger.info('Weather App starting...')
 
-console.log(CONFIG.API_BASE_URL + API_ENDPOINTS.CURRENT_WEATHER);
-console.log(ERROR_MESSAGES.CITY_NOT_FOUND);
+  setupEventListeners()
+  loadHistoryOnStart()
 
-const elements = getElements()
-const preferences = loadUserPreferences()
-CONFIG.DEFAULT_UNITS = preferences.unit
-CONFIG.DEFAULT_LANG = preferences.lang
+  logger.info('Weather App initialized successfully')
+}
 
-// Setează select-urile cu valorile salvate
-elements.unitSelect.value = preferences.unit
-elements.langSelect.value = preferences.lang
+// Încarcă istoricul la start
+const loadHistoryOnStart = () => {
+  const history = historyService.getHistory()
+  if (history.length > 0) {
+    renderHistory(history)
+    showHistory()
+    logger.info(`Loaded ${history.length} items from history`)
+  }
+}
 
+// Funcție principală de căutare
+const handleSearch = async () => {
+  const city = ui.getCityInput().trim()
 
-const isValidCity = (city) => {
-    return city.length >= 2 && /^[a-zA-ZăâîșțĂÂÎȘȚ\s-]+$/.test(city);
-};
+  logger.debug('Search initiated', { city })
 
-const handleSearch = async (e) => {
-    e.preventDefault(); // prevenim reîncărcarea paginii
+  if (!isValidCity(city)) {
+    const errorMsg = 'Numele orașului nu este valid'
+    ui.showError(errorMsg)
+    logger.warn('Invalid city input', { city })
+    return
+  }
 
-    const city = ui.getCityInput();
-    if (!isValidCity(city)) {
-        ui.showError("Numele orașului este invalid.");
-        return;
-    }
+  try {
+    ui.showLoading()
+    logger.info('Fetching weather data', { city })
 
-    ui.showLoading();
-    try {
-        const data = await getCurrentWeather(city);
-        ui.displayWeather(data);
-    } catch (err) {
-        ui.showError("Nu s-au găsit informații pentru orașul introdus.");
-    } finally {
-        ui.hideLoading();
-        ui.clearInput();
-    }
-};
+    const weatherData = await weatherService.getCurrentWeather(city)
 
+    historyService.addLocation(weatherData) // Salvare în istoric
+
+    ui.displayWeather(weatherData)
+    ui.clearInput()
+
+    const updatedHistory = historyService.getHistory()
+    renderHistory(updatedHistory)
+    showHistory()
+
+    logger.info('Weather data displayed successfully', {
+      city: weatherData.name,
+      temp: weatherData.main.temp,
+    })
+  } catch (error) {
+    ui.showError('Nu am putut obține vremea. Încearcă din nou.')
+    logger.error('Failed to fetch weather data', error)
+  } finally {
+    ui.hideLoading()
+  }
+}
+
+// Funcție pentru click pe istoric
+const handleHistoryClick = async ({ city, lat, lon }) => {
+  logger.info('History item clicked', { city, lat, lon })
+
+  try {
+    ui.showLoading()
+
+    const weatherData = await weatherService.getWeatherByCoords(lat, lon)
+
+    historyService.addLocation(weatherData)
+
+    ui.displayWeather(weatherData)
+
+    const updatedHistory = historyService.getHistory()
+    renderHistory(updatedHistory)
+
+    logger.info('Weather loaded from history', { city })
+  } catch (error) {
+    ui.showError('Nu am putut obține vremea din istoric.')
+    logger.error('Failed to load weather from history', error)
+  } finally {
+    ui.hideLoading()
+  }
+}
+
+// Funcție pentru ștergere istoric
+const handleClearHistory = () => {
+  if (confirm('Sigur vrei să ștergi tot istoricul de căutări?')) {
+    historyService.clearHistory()
+    renderHistory([])
+    logger.info('Search history cleared')
+  }
+}
+
+// Setup Event Listeners
 const setupEventListeners = () => {
-    ui.searchBtn.addEventListener('click', handleSearch);
+  ui.elements.searchForm.addEventListener('submit', (e) => {
+    e.preventDefault()
+    handleSearch()
+  })
 
-    // Permite submit și prin apăsarea Enter
-    ui.elements.cityInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleSearch(e);
-    });
-};
+  addHistoryEventListeners(handleHistoryClick, handleClearHistory)
+}
 
-// Pornirea aplicației
-document.addEventListener('DOMContentLoaded', () => {
-    setupEventListeners();
-});
+// Validator simplu pentru oraș (poți îmbunătăți)
+const isValidCity = (city) => city.length >= 2
 
+// Pornește aplicația
+initializeApp()
